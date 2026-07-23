@@ -72,11 +72,16 @@ tasks:
 
 # ---- running stuff ----
 
-  run:
-    desc: Run the application (for development)
+  nats:
+    desc: Run nats application
     silent: true
     cmds:
-      - go run ./cmd/...
+      - go run ./cmd/nats/...
+
+  jetstream:
+    desc: Run jetstream application
+    cmds:
+      - go run ./cmd/jetstream/...
 
 # ---- maintenance tasks ----
 
