@@ -1,0 +1,102 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  clean:
+    desc: Remove build artifacts, .test-results, and .exe files
+    silent: true
+    cmds:
+      - pwsh -NoProfile -NonInteractive -File taskfile/clean.ps1{{if .QUIET}} > /dev/null 2>&1{{end}}
+      - echo clean done
+
+  tidy:
+    desc: Run go mod tidy to clean up dependencies
+    silent: true
+    cmds:
+      - go mod tidy
+      - echo tidy done
+
+  vet:
+    desc: Run go vet to check for potential issues
+    silent: true
+    cmds:
+      - go vet ./...
+      - echo vet done
+
+  fmt:
+    desc: Run go fmt to format the code
+    silent: true
+    cmds:
+      - go fmt ./...
+      - echo fmt done
+  
+  lint:
+    desc: Run golangci-lint
+    silent: true
+    cmds:
+      - echo "Running golangci-lint. This may take a moment..."
+      - golangci-lint run ./...
+      - echo lint done
+
+  deadcode:
+    desc: Check for unreachable functions in cmd entry points
+    silent: true
+    cmds:
+      - pwsh -NoProfile -NonInteractive -File taskfile/deadcode.ps1
+
+  test:
+    desc: Run unit tests (saved to .test-results/)
+    silent: true
+    cmds:
+      - pwsh -NoProfile -NonInteractive -File taskfile/test.ps1
+
+  all:
+    desc: Run all checks and tests. This is the main task to run before considering work complete.
+    silent: true
+    cmds:
+      - task: clean
+        # Set QUIET=1 to suppress output from clean since it can be very verbose and is not the main focus of this task.
+        vars:
+          QUIET: "1"
+      - task tidy
+      - task vet
+      - task fmt
+      - task deadcode
+      - task lint
+      - task test
+      - echo all done
+
+# ---- running stuff ----
+
+  run:
+    desc: Run the application (for development)
+    silent: true
+    cmds:
+      - go run ./cmd/...
+
+# ---- maintenance tasks ----
+
+  deps:
+    desc: List direct dependencies with available updates
+    silent: true
+    cmds:
+      - go list -u -m -f "{{`{{if not .Indirect}}{{.}}{{end}}`}}" all
+
+  go-tools:
+    desc: Install or update required Go tools
+    silent: true
+    cmds:
+      - echo "deadcode for clean code by detecting unused functions"
+      - go install golang.org/x/tools/cmd/deadcode@latest
+
+      - echo "gotestsum for improved test output formatting"
+      - go install gotest.tools/gotestsum@latest
+
+      - echo "go-arch-lint for keeping package dependencies in check and enforcing architectural rules"
+      - go install github.com/fe3dback/go-arch-lint@latest
+
+      - echo done

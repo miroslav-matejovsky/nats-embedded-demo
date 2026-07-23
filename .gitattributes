@@ -1,0 +1,134 @@
+# -------------------------------------------------------------------
+# Global defaults
+# -------------------------------------------------------------------
+
+# Normalize line endings for all text files (do not depend on core.autocrlf)
+* text=auto
+
+# -------------------------------------------------------------------
+# Go
+# -------------------------------------------------------------------
+
+# Ensure Go is treated as Go by GitHub Linguist
+*.go text linguist-language=Go
+
+# Go modules / workspaces
+go.mod       text
+go.sum       text
+go.work      text
+go.work.sum  text
+
+# -------------------------------------------------------------------
+# PowerShell (Windows-native)
+# -------------------------------------------------------------------
+
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# -------------------------------------------------------------------
+# Python
+# -------------------------------------------------------------------
+
+*.py text eol=lf
+
+# -------------------------------------------------------------------
+# TypeScript / JavaScript
+# -------------------------------------------------------------------
+
+# Source files
+*.ts   text eol=lf linguist-language=TypeScript
+*.tsx  text eol=lf linguist-language=TypeScript
+*.js   text eol=lf linguist-language=JavaScript
+*.jsx  text eol=lf linguist-language=JavaScript
+*.mjs  text eol=lf linguist-language=JavaScript
+*.cjs  text eol=lf linguist-language=JavaScript
+
+# Config / tooling
+*.cts  text eol=lf linguist-language=TypeScript
+*.mts  text eol=lf linguist-language=TypeScript
+
+# Generated / bundled JS (conservative)
+*.min.js      linguist-generated
+*.bundle.js   linguist-generated
+*.chunk.js    linguist-generated
+
+# Node / frontend vendoring
+node_modules/** linguist-vendored
+dist/**         linguist-generated
+build/**        linguist-generated
+
+# -------------------------------------------------------------------
+# Rust
+# -------------------------------------------------------------------
+
+# Rust source
+*.rs text eol=lf linguist-language=Rust
+
+# Cargo configuration
+Cargo.toml text
+Cargo.lock text
+
+# Rust build artifacts
+target/** linguist-vendored
+
+# Common generated Rust patterns
+*_generated.rs linguist-generated
+*_gen.rs       linguist-generated
+
+# -------------------------------------------------------------------
+# D2 diagrams
+# -------------------------------------------------------------------
+
+*.d2 text eol=lf
+# Optional override if GitHub misclassifies:
+# *.d2 linguist-language=D2
+
+# -------------------------------------------------------------------
+# Shell / Build scripts
+# -------------------------------------------------------------------
+
+*.sh text eol=lf
+Makefile text
+*.mk text
+
+# -------------------------------------------------------------------
+# Documentation
+# -------------------------------------------------------------------
+
+# Exclude Markdown from language stats
+*.md linguist-documentation
+
+# Man pages
+*.1 linguist-documentation
+*.3 linguist-documentation
+*.7 linguist-documentation
+
+# -------------------------------------------------------------------
+# Generated / Vendored (Go-specific)
+# -------------------------------------------------------------------
+
+# Standard Go vendoring
+vendor/** linguist-vendored
+
+# Common generated Go patterns
+*_generated.go linguist-generated
+*_gen.go       linguist-generated
+*.pb.go        linguist-generated
+*.mock.go      linguist-generated
+
+# -------------------------------------------------------------------
+# Binary & assets
+# -------------------------------------------------------------------
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.svg  binary
+
+*.zip binary
+*.tar binary
+*.gz  binary
+
+*.exe binary
