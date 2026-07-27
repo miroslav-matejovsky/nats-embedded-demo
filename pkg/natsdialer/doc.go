@@ -5,6 +5,6 @@
 // The dialer ignores the network address and returns the server's in-process
 // connection, so the client library speaks the NATS protocol over a net.Pipe
 // instead of a TCP socket. Compare with pkg/natsinprocess, which reaches the
-// same connection through the nats.Options InProcessServer field and is the
-// recommended wiring.
+// same connection through the nats.Options InProcessServer field. See
+// docs/tutorial.md for a comparison of the two approaches.
 package natsdialer

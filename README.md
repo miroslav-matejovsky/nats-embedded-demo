@@ -10,9 +10,11 @@ embedded server entirely over in-memory pipes. The hand-written protocol code
 was removed in favor of the client library.
 
 The repository contains two approaches with two local-only applications each.
+They differ only in how the client obtains its in-process transport; see
+[docs/tutorial.md](docs/tutorial.md) for a pros and cons comparison.
 
-The in-process approach (recommended) sets the `nats.Options` field
-`InProcessServer`, which maps directly to `Server.InProcessConn()`:
+The in-process approach sets the `nats.Options` field `InProcessServer`, which
+maps directly to `Server.InProcessConn()`:
 
 - `cmd/inprocess-nats`: core NATS publish and subscribe.
 - `cmd/inprocess-jetstream`: JetStream stream creation, durable pull
@@ -76,7 +78,7 @@ Shared code is organized as follows:
 
 - `pkg/embeddedserver`: reusable local server configuration and startup.
 - `pkg/natsinprocess`: `nats.go` connection through the `InProcessServer`
-  option (recommended).
+  option.
 - `pkg/natsdialer`: `nats.go` connection through a custom in-process dialer.
 - `internal/demo`: shared command behavior types.
 

@@ -16,17 +16,63 @@ can use that connection as its transport.
 
 Two equivalent wiring options are demonstrated:
 
-- `pkg/natsinprocess` (recommended): set the `nats.Options` field
-  `InProcessServer` (or the `nats.InProcessServer(...)` option). The client
-  calls `Server.InProcessConn()` itself.
+- `pkg/natsinprocess`: set the `nats.Options` field `InProcessServer` (or the
+  `nats.InProcessServer(...)` option). The client calls
+  `Server.InProcessConn()` itself.
 - `pkg/natsdialer`: implement `nats.CustomDialer` with a `Dial` method that
   returns `Server.InProcessConn()`, registered with `nats.SetCustomDialer`,
   following <https://docs.nats.io/using-nats/developer/tutorials/custom_dialer>.
 
 The `cmd/inprocess-*` and `cmd/dialer-*` applications are otherwise identical
-and accept the same flags. The examples below use the in-process variants.
+and accept the same flags. The examples below use the in-process variants; the
+dialer variants behave the same.
 
-## 2. Prerequisites
+## 2. Comparing the two approaches
+
+Both approaches end up on the same transport: a `net.Pipe` created by
+`Server.InProcessConn()`. Message flow, semantics, and performance are
+identical. They differ in how the connection is wired and how much control the
+application keeps.
+
+### InProcessServer option (`pkg/natsinprocess`)
+
+Pros:
+
+- One options field; no extra type to write or maintain.
+- Intent is explicit: the option exists specifically for embedded servers.
+- No placeholder URL. The client knows it is not dialing a network address.
+
+Cons:
+
+- Fixed behavior. The client always connects in-process; there is no place to
+  add fallback servers, transport selection, or connection-time logic.
+- Ties the client options to the `nats.InProcessConnProvider` interface, which
+  in practice means holding a reference to the running `server.Server`.
+
+### Custom dialer (`pkg/natsdialer`)
+
+Pros:
+
+- Full control over connection establishment. The dialer can log, wrap the
+  connection, select among transports (in-process, Unix socket, TCP), or
+  implement custom fallback logic.
+- The same pattern works for any transport that yields a `net.Conn`, not only
+  embedded servers.
+- Documented upstream as a general-purpose extension point.
+
+Cons:
+
+- More code: a dedicated type implementing `nats.CustomDialer`.
+- The connection URL becomes a placeholder that is parsed but never dialed,
+  which can mislead readers and monitoring.
+- The dialer ignores the dialed address, so nats.go's multi-server URL
+  handling silently loses its meaning.
+
+For a plain embedded-server setup the two are interchangeable. Choose based on
+whether the fixed in-process wiring is enough or connection establishment
+needs custom logic.
+
+## 3. Prerequisites
 
 - Go version from `go.mod`.
 - Task, if running the full project checks.
@@ -37,7 +83,7 @@ No external `nats-server` executable is needed.
 All listeners and routes bind or connect only to loopback addresses. The demo
 rejects a route whose host is not `localhost` or a loopback IP address.
 
-## 3. Standalone core NATS
+## 4. Standalone core NATS
 
 Run:
 
@@ -56,7 +102,7 @@ With the default `--mode=both`, the process:
 Ports set to `-1` use random local ports. With no `--routes`, clustering is
 disabled.
 
-## 4. Core NATS across two processes
+## 5. Core NATS across two processes
 
 Each process owns its own embedded server and its own in-process client
 connection. The servers connect through loopback route ports.
@@ -93,7 +139,7 @@ then publishes. Terminal A receives one message and exits.
 Core NATS messages are transient. If no subscriber interest exists when a
 message is published, the message is not retained.
 
-## 5. Standalone JetStream
+## 6. Standalone JetStream
 
 Run:
 
@@ -117,7 +163,7 @@ The process:
 The default file-backed stream survives process restarts when the same store
 directory is reused. Use a new directory for a clean run.
 
-## 6. JetStream across two processes
+## 7. JetStream across two processes
 
 JetStream clustering requires configured routes. Each node below has a route to
 the other node, including the node that starts first.
@@ -156,7 +202,7 @@ cluster normally uses three or more nodes and an appropriate replica count.
 The durable consumer is named `demo-consumer`. A subscriber can restart with
 the same store and consumer name and continue from its acknowledged position.
 
-## 7. Server internals and process boundaries
+## 8. Server internals and process boundaries
 
 `Server.InProcessConn()` creates a `net.Pipe`. The server registers its end by
 calling its internal client creation path. From that point, parsing, permission
@@ -181,7 +227,7 @@ application A (nats.go)
 This preserves normal NATS routing behavior while avoiding a local TCP client
 connection inside each process.
 
-## 8. Run checks
+## 9. Run checks
 
 ```powershell
 task all
