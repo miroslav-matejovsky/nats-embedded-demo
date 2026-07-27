@@ -12,9 +12,9 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/miroslav-matejovsky/nats-demo/internal/demo"
-	"github.com/miroslav-matejovsky/nats-demo/pkg/embeddedserver"
-	"github.com/miroslav-matejovsky/nats-demo/pkg/natsinprocess"
+	"github.com/miroslav-matejovsky/nats-embedded-demo/internal/demo"
+	"github.com/miroslav-matejovsky/nats-embedded-demo/pkg/embeddedserver"
+	"github.com/miroslav-matejovsky/nats-embedded-demo/pkg/natsinprocess"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 )

@@ -1,4 +1,4 @@
-# Embedded NATS demo
+# NATS-embedded demo
 
 This repository demonstrates message passing through an embedded NATS server
 using the official `nats.go` client without any client network connection.

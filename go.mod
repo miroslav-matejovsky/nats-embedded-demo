@@ -1,4 +1,4 @@
-module github.com/miroslav-matejovsky/nats-demo
+module github.com/miroslav-matejovsky/nats-embedded-demo
 
 go 1.26.5
 
