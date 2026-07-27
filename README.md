@@ -25,24 +25,26 @@ The custom dialer approach reaches the same in-process connection through
 
 Each process embeds `github.com/nats-io/nats-server/v2/server`. In both
 approaches the client transport is a `net.Pipe` from `Server.InProcessConn()`,
-so no client TCP connection exists. Multiple processes exchange messages
-through NATS routes bound to loopback addresses.
+so no client TCP connection exists. There is no client port to configure:
+a standalone server runs with `DontListen` and opens no client listener at
+all. Multiple processes exchange messages through NATS routes bound to
+loopback addresses, configured with `--route-port` and `--routes`.
 
 ## Quick start
 
 Run a standalone core NATS round trip:
 
 ```powershell
-go run ./cmd/inprocess-nats --client-port=-1 --cluster-port=-1
-go run ./cmd/dialer-nats --client-port=-1 --cluster-port=-1
+go run ./cmd/inprocess-nats
+go run ./cmd/dialer-nats
 ```
 
 Run a standalone JetStream round trip:
 
 ```powershell
-go run ./cmd/inprocess-jetstream --client-port=-1 --cluster-port=-1 `
+go run ./cmd/inprocess-jetstream `
   --store-dir=.test-results/quickstart-js
-go run ./cmd/dialer-jetstream --client-port=-1 --cluster-port=-1 `
+go run ./cmd/dialer-jetstream `
   --store-dir=.test-results/quickstart-dialer-js
 ```
 

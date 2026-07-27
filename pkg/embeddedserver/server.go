@@ -14,19 +14,26 @@ import (
 const readyTimeout = 5 * time.Second
 
 // Config configures one local embedded NATS server instance.
+//
+// There is no client port to configure. Clients reach the server through
+// server.Server.InProcessConn, so a standalone server is started with
+// DontListen and opens no client listener at all. A clustered server has to
+// open one anyway; see Start for why, and note that nothing ever connects to
+// it.
 type Config struct {
 	// Name uniquely identifies the server in a cluster.
 	Name string
-	// ClientPort is the loopback client listener port. Use server.RANDOM_PORT
-	// to select an available port.
-	ClientPort int
 	// ClusterName identifies the cluster when Routes is not empty.
 	ClusterName string
-	// ClusterPort is the loopback route listener port when Routes is not empty.
-	// Use server.RANDOM_PORT to select an available port.
-	ClusterPort int
-	// Routes is a comma-separated list of loopback NATS route URLs. Clustering
-	// is disabled when Routes is empty.
+	// RoutePort is the loopback TCP port on which this server accepts route
+	// connections from the other embedded servers listed in their Routes.
+	// It is used only when Routes is not empty, and it carries server-to-server
+	// traffic only, never client traffic. Use server.RANDOM_PORT to select an
+	// available port.
+	RoutePort int
+	// Routes is a comma-separated list of loopback NATS route URLs pointing at
+	// the RoutePort of other embedded servers. Clustering is disabled when
+	// Routes is empty.
 	Routes string
 	// JetStream enables JetStream storage and APIs.
 	JetStream bool
@@ -35,6 +42,18 @@ type Config struct {
 }
 
 // Start validates config, starts an embedded server, and waits for readiness.
+//
+// The client listener is disabled with DontListen whenever clustering is off,
+// which proves the demo's point: the nats.go client needs no client port.
+//
+// Clustering is the one exception. server.Server.Start only launches routing
+// after the client accept loop has opened its port (it hands StartRouting a
+// clientListenReady channel that AcceptLoop closes), and AcceptLoop does not
+// run under DontListen. A clustered server started with DontListen therefore
+// never opens its route listener and never becomes ready. So when routes are
+// configured this opens a client listener on an unpredictable loopback port
+// that the demo never advertises and nothing ever connects to; the client
+// still attaches in process.
 func Start(config Config) (*server.Server, error) {
 	if err := validate(config); err != nil {
 		return nil, err
@@ -47,7 +66,7 @@ func Start(config Config) (*server.Server, error) {
 	opts := &server.Options{
 		ServerName: config.Name,
 		Host:       "127.0.0.1",
-		Port:       config.ClientPort,
+		DontListen: true,
 		NoSigs:     true,
 		NoLog:      true,
 		JetStream:  config.JetStream,
@@ -55,10 +74,12 @@ func Start(config Config) (*server.Server, error) {
 		Routes:     routes,
 	}
 	if len(routes) > 0 {
+		opts.DontListen = false
+		opts.Port = server.RANDOM_PORT
 		opts.Cluster = server.ClusterOpts{
 			Name: config.ClusterName,
 			Host: "127.0.0.1",
-			Port: config.ClusterPort,
+			Port: config.RoutePort,
 		}
 	}
 
@@ -74,8 +95,8 @@ func Start(config Config) (*server.Server, error) {
 	return instance, nil
 }
 
-// ClusterAddress returns the route listener address or "disabled".
-func ClusterAddress(instance *server.Server) string {
+// RouteAddress returns the route listener address or "disabled".
+func RouteAddress(instance *server.Server) string {
 	if instance == nil || instance.ClusterAddr() == nil {
 		return "disabled"
 	}
@@ -86,18 +107,12 @@ func validate(config Config) error {
 	if strings.TrimSpace(config.Name) == "" {
 		return errors.New("server name is required")
 	}
-	if err := validatePort("client", config.ClientPort); err != nil {
-		return err
-	}
 	if strings.TrimSpace(config.Routes) != "" {
 		if strings.TrimSpace(config.ClusterName) == "" {
 			return errors.New("cluster name is required when routes are configured")
 		}
-		if err := validatePort("cluster", config.ClusterPort); err != nil {
+		if err := validatePort("route", config.RoutePort); err != nil {
 			return err
-		}
-		if config.ClientPort == config.ClusterPort && config.ClientPort != server.RANDOM_PORT {
-			return errors.New("client and cluster ports must differ")
 		}
 	}
 	if config.JetStream && strings.TrimSpace(config.StoreDir) == "" {

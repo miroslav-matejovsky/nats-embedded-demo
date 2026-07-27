@@ -83,12 +83,33 @@ No external `nats-server` executable is needed.
 All listeners and routes bind or connect only to loopback addresses. The demo
 rejects a route whose host is not `localhost` or a loopback IP address.
 
+### Ports
+
+There is no client port flag. The client attaches with
+`Server.InProcessConn()`, so a standalone demo server starts with the
+`DontListen` option and opens no client listener at all.
+
+The only port the demos expose is `--route-port`: the loopback TCP port on
+which an embedded server accepts *route* connections from the other embedded
+servers, the ones that name it in their `--routes`. It carries server-to-server
+traffic only. Routes are how two processes reach each other, so `--route-port`
+and `--routes` are needed only for the multi-process examples; a standalone run
+ignores both, and with no `--routes` clustering is disabled entirely.
+
+One caveat: clustering and `DontListen` are mutually exclusive in
+`nats-server`. `Server.Start` hands `StartRouting` a `clientListenReady`
+channel that only `AcceptLoop` closes, and `AcceptLoop` does not run under
+`DontListen`, so a clustered server started that way never opens its route
+listener. `pkg/embeddedserver` therefore keeps the client listener enabled when
+routes are configured, on a random loopback port that is never printed and that
+nothing connects to. The client still attaches in process.
+
 ## 4. Standalone core NATS
 
 Run:
 
 ```powershell
-go run ./cmd/inprocess-nats --client-port=-1 --cluster-port=-1
+go run ./cmd/inprocess-nats
 ```
 
 With the default `--mode=both`, the process:
@@ -99,21 +120,22 @@ With the default `--mode=both`, the process:
 4. Publishes one message and flushes it.
 5. Receives the message and shuts down.
 
-Ports set to `-1` use random local ports. With no `--routes`, clustering is
-disabled.
+This run opens no TCP listener of any kind: no client port, and no route port
+because no routes are configured.
 
 ## 5. Core NATS across two processes
 
 Each process owns its own embedded server and its own in-process client
-connection. The servers connect through loopback route ports.
+connection. The servers connect through the loopback route ports set with
+`--route-port`. Each `--routes` value points at the other process's
+`--route-port`.
 
 Terminal A:
 
 ```powershell
 go run ./cmd/inprocess-nats `
   --name=core-a `
-  --client-port=4222 `
-  --cluster-port=6222 `
+  --route-port=6222 `
   --routes=nats://127.0.0.1:6223 `
   --mode=subscriber `
   --timeout=2m
@@ -124,8 +146,7 @@ Terminal B:
 ```powershell
 go run ./cmd/inprocess-nats `
   --name=core-b `
-  --client-port=4223 `
-  --cluster-port=6223 `
+  --route-port=6223 `
   --routes=nats://127.0.0.1:6222 `
   --mode=publisher `
   --message="hello across embedded servers" `
@@ -145,8 +166,6 @@ Run:
 
 ```powershell
 go run ./cmd/inprocess-jetstream `
-  --client-port=-1 `
-  --cluster-port=-1 `
   --store-dir=.test-results/standalone-js
 ```
 
@@ -173,8 +192,7 @@ Terminal A:
 ```powershell
 go run ./cmd/inprocess-jetstream `
   --name=js-a `
-  --client-port=4322 `
-  --cluster-port=6322 `
+  --route-port=6322 `
   --routes=nats://127.0.0.1:6323 `
   --store-dir=.test-results/js-a `
   --mode=subscriber `
@@ -186,8 +204,7 @@ Terminal B:
 ```powershell
 go run ./cmd/inprocess-jetstream `
   --name=js-b `
-  --client-port=4323 `
-  --cluster-port=6323 `
+  --route-port=6323 `
   --routes=nats://127.0.0.1:6322 `
   --store-dir=.test-results/js-b `
   --mode=publisher `
@@ -233,7 +250,8 @@ connection inside each process.
 task all
 ```
 
-The tests start embedded servers with no TCP client listener (`DontListen`).
-They exercise both connection options, core delivery, JetStream stream and
+The tests start embedded servers with no TCP client listener (`DontListen`),
+the same way the standalone demos do, and assert that no client listener
+address exists. They exercise both connection options, core delivery, JetStream stream and
 consumer creation, persistence acknowledgement, delivery, and explicit
 acknowledgement.

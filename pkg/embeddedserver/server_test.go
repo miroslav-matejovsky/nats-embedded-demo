@@ -17,12 +17,38 @@ func TestLocalRoutesRejectsNonLoopbackAddress(t *testing.T) {
 func TestStartWithoutRoutesDisablesClustering(t *testing.T) {
 	t.Parallel()
 
+	instance, err := Start(Config{Name: "standalone"})
+	require.NoError(t, err)
+	t.Cleanup(instance.Shutdown)
+
+	require.Equal(t, "disabled", RouteAddress(instance))
+}
+
+func TestStartOpensNoClientListener(t *testing.T) {
+	t.Parallel()
+
+	instance, err := Start(Config{Name: "no-client-listener"})
+	require.NoError(t, err)
+	t.Cleanup(instance.Shutdown)
+
+	require.Nil(t, instance.Addr(), "embedded server must not accept client TCP connections")
+}
+
+// TestStartWithRoutesBecomesReady guards the DontListen and clustering
+// interaction described on Start: nats-server only starts routing once the
+// client accept loop is up, so a clustered server started with DontListen
+// would hang instead of opening its route listener.
+func TestStartWithRoutesBecomesReady(t *testing.T) {
+	t.Parallel()
+
 	instance, err := Start(Config{
-		Name:       "standalone",
-		ClientPort: server.RANDOM_PORT,
+		Name:        "clustered",
+		ClusterName: "embedded-test",
+		RoutePort:   server.RANDOM_PORT,
+		Routes:      "nats://127.0.0.1:6222",
 	})
 	require.NoError(t, err)
 	t.Cleanup(instance.Shutdown)
 
-	require.Equal(t, "disabled", ClusterAddress(instance))
+	require.NotEqual(t, "disabled", RouteAddress(instance))
 }

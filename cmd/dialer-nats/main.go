@@ -23,9 +23,8 @@ const interestPollInterval = 50 * time.Millisecond
 
 type config struct {
 	name        string
-	clientPort  int
 	clusterName string
-	clusterPort int
+	routePort   int
 	routes      string
 	mode        string
 	subject     string
@@ -62,9 +61,8 @@ func run(parent context.Context, args []string, output io.Writer) error {
 
 	instance, err := embeddedserver.Start(embeddedserver.Config{
 		Name:        cfg.name,
-		ClientPort:  cfg.clientPort,
 		ClusterName: cfg.clusterName,
-		ClusterPort: cfg.clusterPort,
+		RoutePort:   cfg.routePort,
 		Routes:      cfg.routes,
 	})
 	if err != nil {
@@ -80,10 +78,9 @@ func run(parent context.Context, args []string, output io.Writer) error {
 
 	_, _ = fmt.Fprintf(
 		output,
-		"server=%s client=%s cluster=%s mode=%s\n",
+		"server=%s client=in-process route=%s mode=%s\n",
 		instance.Name(),
-		instance.ClientURL(),
-		embeddedserver.ClusterAddress(instance),
+		embeddedserver.RouteAddress(instance),
 		mode,
 	)
 
@@ -131,9 +128,9 @@ func parseConfig(args []string) (config, error) {
 	flags := flag.NewFlagSet("dialer-nats", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.name, "name", "dialer-a", "unique embedded server name")
-	flags.IntVar(&cfg.clientPort, "client-port", 4222, "local NATS client listener port")
 	flags.StringVar(&cfg.clusterName, "cluster", "embedded-dialer-demo", "NATS cluster name")
-	flags.IntVar(&cfg.clusterPort, "cluster-port", 6222, "local route listener port")
+	flags.IntVar(&cfg.routePort, "route-port", 6222,
+		"loopback TCP port for the server-to-server route listener; used only with --routes")
 	flags.StringVar(&cfg.routes, "routes", "", "comma-separated local seed routes")
 	flags.StringVar(&cfg.mode, "mode", string(demo.ModeBoth), "both, publisher, or subscriber")
 	flags.StringVar(&cfg.subject, "subject", "demo.core", "NATS subject")

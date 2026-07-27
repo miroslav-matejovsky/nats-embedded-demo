@@ -28,9 +28,8 @@ const (
 
 type config struct {
 	name        string
-	clientPort  int
 	clusterName string
-	clusterPort int
+	routePort   int
 	routes      string
 	storeDir    string
 	mode        string
@@ -77,9 +76,8 @@ func run(parent context.Context, args []string, output io.Writer) error {
 
 	instance, err := embeddedserver.Start(embeddedserver.Config{
 		Name:        cfg.name,
-		ClientPort:  cfg.clientPort,
 		ClusterName: cfg.clusterName,
-		ClusterPort: cfg.clusterPort,
+		RoutePort:   cfg.routePort,
 		Routes:      cfg.routes,
 		JetStream:   true,
 		StoreDir:    cfg.storeDir,
@@ -102,10 +100,9 @@ func run(parent context.Context, args []string, output io.Writer) error {
 
 	_, _ = fmt.Fprintf(
 		output,
-		"server=%s client=%s cluster=%s store=%s mode=%s\n",
+		"server=%s client=in-process route=%s store=%s mode=%s\n",
 		instance.Name(),
-		instance.ClientURL(),
-		embeddedserver.ClusterAddress(instance),
+		embeddedserver.RouteAddress(instance),
 		cfg.storeDir,
 		mode,
 	)
@@ -204,9 +201,9 @@ func parseConfig(args []string) (config, error) {
 	flags := flag.NewFlagSet("inprocess-jetstream", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.name, "name", "js-a", "unique embedded server name")
-	flags.IntVar(&cfg.clientPort, "client-port", 4222, "local NATS client listener port")
 	flags.StringVar(&cfg.clusterName, "cluster", "embedded-js-demo", "NATS cluster name")
-	flags.IntVar(&cfg.clusterPort, "cluster-port", 6222, "local route listener port")
+	flags.IntVar(&cfg.routePort, "route-port", 6222,
+		"loopback TCP port for the server-to-server route listener; used only with --routes")
 	flags.StringVar(&cfg.routes, "routes", "", "comma-separated local seed routes")
 	flags.StringVar(&cfg.storeDir, "store-dir", "", "JetStream data directory")
 	flags.StringVar(&cfg.mode, "mode", string(demo.ModeBoth), "both, publisher, or subscriber")
