@@ -1,3 +1,6 @@
+// Command dialer-jetstream runs the JetStream demo using the official nats.go
+// client and its jetstream package, connected through a custom in-process
+// dialer.
 package main
 
 import (
@@ -13,11 +16,15 @@ import (
 
 	"github.com/miroslav-matejovsky/nats-demo/internal/demo"
 	"github.com/miroslav-matejovsky/nats-demo/pkg/embeddedserver"
-	"github.com/miroslav-matejovsky/nats-demo/pkg/jetstream"
-	"github.com/miroslav-matejovsky/nats-demo/pkg/natswire"
+	"github.com/miroslav-matejovsky/nats-demo/pkg/natsdialer"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-const pullExpires = 2 * time.Second
+const (
+	pullExpires        = 2 * time.Second
+	readyPollInterval  = 100 * time.Millisecond
+	readyProbeDuration = time.Second
+)
 
 type config struct {
 	name        string
@@ -41,12 +48,12 @@ func main() {
 	defer stop()
 
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "jetstream demo: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "dialer jetstream demo: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(parent context.Context, args []string, output io.Writer) (runErr error) {
+func run(parent context.Context, args []string, output io.Writer) error {
 	cfg, err := parseConfig(args)
 	if err != nil {
 		return err
@@ -82,21 +89,15 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 	}
 	defer instance.Shutdown()
 
-	rawConn, err := instance.InProcessConn()
-	if err != nil {
-		return fmt.Errorf("create in-process connection: %w", err)
-	}
-	conn, err := natswire.Connect(ctx, rawConn, cfg.name+"-app")
-	if err != nil {
-		closeErr := rawConn.Close()
-		return errors.Join(err, closeErr)
-	}
-	defer func() {
-		runErr = errors.Join(runErr, conn.Close())
-	}()
-	js, err := jetstream.New(conn)
+	conn, err := natsdialer.Connect(instance, cfg.name+"-app")
 	if err != nil {
 		return err
+	}
+	defer conn.Close()
+
+	js, err := jetstream.New(conn)
+	if err != nil {
+		return fmt.Errorf("create JetStream client: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(
@@ -108,64 +109,103 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 		cfg.storeDir,
 		mode,
 	)
-	if err := js.WaitReady(ctx); err != nil {
+
+	if err := waitReady(ctx, js); err != nil {
 		return err
 	}
-	if err := js.EnsureStream(ctx, cfg.stream, cfg.subject, cfg.replicas); err != nil {
-		return err
+	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:     cfg.stream,
+		Subjects: []string{cfg.subject},
+		Storage:  jetstream.FileStorage,
+		Replicas: cfg.replicas,
+	})
+	if err != nil {
+		return fmt.Errorf("create stream %q: %w", cfg.stream, err)
 	}
 	_, _ = fmt.Fprintf(output, "stream=%s subject=%s replicas=%d\n", cfg.stream, cfg.subject, cfg.replicas)
 
+	var consumer jetstream.Consumer
 	if mode.Subscribes() {
-		if err := js.EnsurePullConsumer(ctx, cfg.stream, cfg.consumer, cfg.subject); err != nil {
-			return err
+		consumer, err = stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+			Durable:       cfg.consumer,
+			DeliverPolicy: jetstream.DeliverAllPolicy,
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			FilterSubject: cfg.subject,
+			ReplayPolicy:  jetstream.ReplayInstantPolicy,
+		})
+		if err != nil {
+			return fmt.Errorf("create consumer %q: %w", cfg.consumer, err)
 		}
 		_, _ = fmt.Fprintf(output, "consumer=%s ready\n", cfg.consumer)
 	}
 
 	if mode.Publishes() {
-		sequence, err := js.Publish(ctx, cfg.subject, []byte(cfg.message))
+		ack, err := js.Publish(ctx, cfg.subject, []byte(cfg.message))
 		if err != nil {
-			return err
+			return fmt.Errorf("publish JetStream message: %w", err)
 		}
 		_, _ = fmt.Fprintf(
 			output,
 			"stored stream=%s sequence=%d data=%q\n",
-			cfg.stream,
-			sequence,
+			ack.Stream,
+			ack.Sequence,
 			cfg.message,
 		)
 	}
 
 	if mode.Subscribes() {
 		for received := 0; received < cfg.count; {
-			msg, err := js.Next(ctx, cfg.stream, cfg.consumer, pullExpires)
-			if isPullTimeout(err) {
-				continue
-			}
+			batch, err := consumer.Fetch(1, jetstream.FetchMaxWait(pullExpires))
 			if err != nil {
-				return err
+				return fmt.Errorf("pull JetStream message: %w", err)
 			}
-			if err := js.Ack(msg); err != nil {
-				return err
+			for msg := range batch.Messages() {
+				if err := msg.Ack(); err != nil {
+					return fmt.Errorf("acknowledge JetStream message: %w", err)
+				}
+				received++
+				_, _ = fmt.Fprintf(output, "received subject=%s data=%q acked=true\n", msg.Subject(), msg.Data())
 			}
-			received++
-			_, _ = fmt.Fprintf(output, "received subject=%s data=%q acked=true\n", msg.Subject, msg.Data)
+			if err := batch.Error(); err != nil {
+				return fmt.Errorf("pull JetStream message: %w", err)
+			}
 		}
-		if err := conn.Flush(ctx); err != nil {
-			return err
+		if err := conn.FlushWithContext(ctx); err != nil {
+			return fmt.Errorf("flush acknowledgements: %w", err)
 		}
 	}
 	return nil
 }
 
+// waitReady polls the JetStream account API until it responds, which covers
+// clustered starts where the meta leader is not elected yet.
+func waitReady(ctx context.Context, js jetstream.JetStream) error {
+	ticker := time.NewTicker(readyPollInterval)
+	defer ticker.Stop()
+
+	for {
+		probeCtx, cancel := context.WithTimeout(ctx, readyProbeDuration)
+		_, err := js.AccountInfo(probeCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for JetStream readiness: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 func parseConfig(args []string) (config, error) {
 	var cfg config
-	flags := flag.NewFlagSet("jetstream", flag.ContinueOnError)
+	flags := flag.NewFlagSet("dialer-jetstream", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	flags.StringVar(&cfg.name, "name", "js-a", "unique embedded server name")
+	flags.StringVar(&cfg.name, "name", "dialer-js-a", "unique embedded server name")
 	flags.IntVar(&cfg.clientPort, "client-port", 4222, "local NATS client listener port")
-	flags.StringVar(&cfg.clusterName, "cluster", "embedded-js-demo", "NATS cluster name")
+	flags.StringVar(&cfg.clusterName, "cluster", "embedded-dialer-js-demo", "NATS cluster name")
 	flags.IntVar(&cfg.clusterPort, "cluster-port", 6222, "local route listener port")
 	flags.StringVar(&cfg.routes, "routes", "", "comma-separated local seed routes")
 	flags.StringVar(&cfg.storeDir, "store-dir", "", "JetStream data directory")
@@ -173,7 +213,7 @@ func parseConfig(args []string) (config, error) {
 	flags.StringVar(&cfg.stream, "stream", "DEMO", "JetStream stream name")
 	flags.StringVar(&cfg.consumer, "consumer", "demo-consumer", "durable pull consumer name")
 	flags.StringVar(&cfg.subject, "subject", "demo.jetstream", "stream subject")
-	flags.StringVar(&cfg.message, "message", "hello from embedded JetStream", "message to publish")
+	flags.StringVar(&cfg.message, "message", "hello from custom dialer JetStream", "message to publish")
 	flags.IntVar(&cfg.count, "count", 1, "messages to receive")
 	flags.IntVar(&cfg.replicas, "replicas", 1, "stream replica count")
 	flags.DurationVar(&cfg.timeout, "timeout", 30*time.Second, "maximum demo run time")
@@ -184,9 +224,4 @@ func parseConfig(args []string) (config, error) {
 		return config{}, errors.New("timeout must be positive")
 	}
 	return cfg, nil
-}
-
-func isPullTimeout(err error) bool {
-	var statusErr *natswire.StatusError
-	return errors.As(err, &statusErr) && statusErr.Code == 408
 }

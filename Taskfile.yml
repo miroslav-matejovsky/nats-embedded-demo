@@ -72,16 +72,27 @@ tasks:
 
 # ---- running stuff ----
 
-  nats:
-    desc: Run nats application
+  inprocess-nats:
+    desc: Run core NATS application (nats.go InProcessServer approach)
     silent: true
     cmds:
-      - go run ./cmd/nats/...
+      - go run ./cmd/inprocess-nats/...
 
-  jetstream:
-    desc: Run jetstream application
+  inprocess-jetstream:
+    desc: Run JetStream application (nats.go InProcessServer approach)
     cmds:
-      - go run ./cmd/jetstream/...
+      - go run ./cmd/inprocess-jetstream/...
+
+  dialer-nats:
+    desc: Run core NATS application (nats.go custom dialer approach)
+    silent: true
+    cmds:
+      - go run ./cmd/dialer-nats/...
+
+  dialer-jetstream:
+    desc: Run JetStream application (nats.go custom dialer approach)
+    cmds:
+      - go run ./cmd/dialer-jetstream/...
 
 # ---- maintenance tasks ----
 

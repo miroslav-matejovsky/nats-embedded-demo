@@ -1,3 +1,5 @@
+// Command inprocess-nats runs the core NATS demo using the official nats.go
+// client connected through the nats.Options InProcessServer field.
 package main
 
 import (
@@ -12,8 +14,9 @@ import (
 
 	"github.com/miroslav-matejovsky/nats-demo/internal/demo"
 	"github.com/miroslav-matejovsky/nats-demo/pkg/embeddedserver"
-	"github.com/miroslav-matejovsky/nats-demo/pkg/natswire"
+	"github.com/miroslav-matejovsky/nats-demo/pkg/natsinprocess"
 	"github.com/nats-io/nats-server/v2/server"
+	"github.com/nats-io/nats.go"
 )
 
 const interestPollInterval = 50 * time.Millisecond
@@ -36,12 +39,12 @@ func main() {
 	defer stop()
 
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "nats demo: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "in-process nats demo: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(parent context.Context, args []string, output io.Writer) (runErr error) {
+func run(parent context.Context, args []string, output io.Writer) error {
 	cfg, err := parseConfig(args)
 	if err != nil {
 		return err
@@ -69,18 +72,11 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 	}
 	defer instance.Shutdown()
 
-	rawConn, err := instance.InProcessConn()
+	conn, err := natsinprocess.Connect(instance, cfg.name+"-app")
 	if err != nil {
-		return fmt.Errorf("create in-process connection: %w", err)
+		return err
 	}
-	conn, err := natswire.Connect(ctx, rawConn, cfg.name+"-app")
-	if err != nil {
-		closeErr := rawConn.Close()
-		return errors.Join(err, closeErr)
-	}
-	defer func() {
-		runErr = errors.Join(runErr, conn.Close())
-	}()
+	defer conn.Close()
 
 	_, _ = fmt.Fprintf(
 		output,
@@ -91,14 +87,14 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 		mode,
 	)
 
-	var sid string
+	var subscription *nats.Subscription
 	if mode.Subscribes() {
-		sid, err = conn.Subscribe(cfg.subject)
+		subscription, err = conn.SubscribeSync(cfg.subject)
 		if err != nil {
-			return err
+			return fmt.Errorf("subscribe to %q: %w", cfg.subject, err)
 		}
-		if err := conn.Flush(ctx); err != nil {
-			return err
+		if err := conn.FlushWithContext(ctx); err != nil {
+			return fmt.Errorf("flush subscription: %w", err)
 		}
 		_, _ = fmt.Fprintf(output, "subscribed subject=%s\n", cfg.subject)
 	}
@@ -109,20 +105,20 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 				return err
 			}
 		}
-		if err := conn.Publish(cfg.subject, "", []byte(cfg.message)); err != nil {
-			return err
+		if err := conn.Publish(cfg.subject, []byte(cfg.message)); err != nil {
+			return fmt.Errorf("publish to %q: %w", cfg.subject, err)
 		}
-		if err := conn.Flush(ctx); err != nil {
-			return err
+		if err := conn.FlushWithContext(ctx); err != nil {
+			return fmt.Errorf("flush publish: %w", err)
 		}
 		_, _ = fmt.Fprintf(output, "published subject=%s data=%q\n", cfg.subject, cfg.message)
 	}
 
 	if mode.Subscribes() {
 		for range cfg.count {
-			msg, err := conn.Next(ctx, sid)
+			msg, err := subscription.NextMsgWithContext(ctx)
 			if err != nil {
-				return err
+				return fmt.Errorf("receive message: %w", err)
 			}
 			_, _ = fmt.Fprintf(output, "received subject=%s data=%q\n", msg.Subject, msg.Data)
 		}
@@ -132,7 +128,7 @@ func run(parent context.Context, args []string, output io.Writer) (runErr error)
 
 func parseConfig(args []string) (config, error) {
 	var cfg config
-	flags := flag.NewFlagSet("nats", flag.ContinueOnError)
+	flags := flag.NewFlagSet("inprocess-nats", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&cfg.name, "name", "nats-a", "unique embedded server name")
 	flags.IntVar(&cfg.clientPort, "client-port", 4222, "local NATS client listener port")
