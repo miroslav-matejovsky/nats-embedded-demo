@@ -1,13 +1,9 @@
-# Embedded NATS demo
+# NATS-embedded demo
 
 This repository demonstrates message passing through an embedded NATS server
 using the official `nats.go` client without any client network connection.
-
-An earlier iteration avoided `nats.go` entirely and wrote the NATS text
-protocol by hand. That requirement was based on the wrong assumption that the
-client library must use the network. It does not: `nats.go` can connect to an
-embedded server entirely over in-memory pipes. The hand-written protocol code
-was removed in favor of the client library.
+The client connects to the embedded server entirely over in-memory pipes, so
+no client TCP connection exists.
 
 The repository contains two approaches with two local-only applications each.
 They differ only in how the client obtains its in-process transport; see
@@ -55,9 +51,9 @@ consume similarly named flags.
 
 See [docs/README.md](docs/README.md) for:
 
-- the design of a direct-call Core NATS-style broker built from scratch;
-- maintained same-process and local multi-process alternatives;
-- a tutorial for the current demos.
+- a tutorial for the demos in this repository;
+- a comparison of same-process and local multi-process messaging alternatives;
+- design studies of a protocol-free, direct-call Core NATS-style broker.
 
 ## Architecture
 

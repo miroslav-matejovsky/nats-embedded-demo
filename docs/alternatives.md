@@ -1,9 +1,14 @@
 # Existing alternatives
 
+This document surveys maintained options for local messaging with a direct Go
+API and compares them with the embedded-NATS approach used in this repository.
+The ideal being evaluated is: direct Go publish and subscribe calls, separate
+local processes, and no network transport.
+
 ## 1. Decision summary
 
 No existing library can provide direct Go function calls between separate
-processes. That requirement is physically impossible. The practical choices
+processes. That combination is physically impossible. The practical choices
 are:
 
 1. Keep all message participants in one process and use an in-memory Go
@@ -33,7 +38,7 @@ protocol.
 | Watermill SQLite | Yes | Yes, through a shared database file | Yes | Polling and locking; semantics are durable and acknowledgement-oriented |
 | Centrifuge MemoryBroker | Yes | No | No | Designed for realtime client systems, not a general Core NATS replacement |
 | Custom broker plus named pipe or Unix socket | Yes, to the local node | Yes | No unless added | Must own framing, routing, limits, reconnection, and cross-node queue groups |
-| Embedded NATS plus `InProcessConn` | No, it is `net.Pipe` plus protocol | Yes, through NATS routes | No for Core NATS | Exact server semantics, but violates the direct-call requirement |
+| Embedded NATS plus `InProcessConn` | No, it is `net.Pipe` plus protocol | Yes, through NATS routes | No for Core NATS | Exact server semantics, but no direct-call Go API |
 | External NATS, Redis, or PostgreSQL | No | Yes | Product-dependent | Separate service or existing database dependency |
 
 ## 3. Same-process alternatives
@@ -205,9 +210,9 @@ Payload size, transaction timing, connection ownership, and reconnect behavior
 must be considered. It is not a Core NATS replacement and should not be added
 only for local messaging.
 
-## 5. NATS itself as the rejected boundary
+## 5. Embedded NATS as used in this repository
 
-The current repository uses embedded `nats-server` and
+This repository uses embedded `nats-server` and
 `Server.InProcessConn()`. It has several valuable properties:
 
 - real Core NATS subject matching and queue groups;
@@ -217,7 +222,7 @@ The current repository uses embedded `nats-server` and
 
 It does not provide direct publish and subscribe function calls. The in-process
 connection is a `net.Pipe`, and application messages are NATS protocol frames.
-This makes it a valid "no TCP client connection" experiment, but not a valid
+This makes it a "no TCP client connection" solution, but not a
 "no client protocol" solution.
 
 The normal NATS client is still the lowest-risk option when exact Core NATS
