@@ -1,5 +1,12 @@
 # Embedded NATS tutorial without a client library
 
+> Scope: this document describes the protocol experiment currently implemented
+> in the repository. It uses `Server.InProcessConn()`, `net.Pipe`, and NATS
+> protocol frames. It does not provide direct publish and subscribe Go calls.
+> See [Core broker from scratch](core-broker-from-scratch.md) for the requested
+> direct-call design and [Existing alternatives](alternatives.md) for maintained
+> options.
+
 ## 1. What this demo proves
 
 An application can embed a NATS server and exchange messages without importing

@@ -3,6 +3,11 @@
 This repository demonstrates message passing through an embedded NATS server
 without using a NATS client library in application code.
 
+The current code is a protocol experiment. It does not meet the stricter
+requirement of publishing and subscribing through direct server method calls.
+The server's supported in-process API still uses `net.Pipe` and NATS protocol
+frames.
+
 It contains two local-only applications:
 
 - `cmd/nats`: core NATS publish and subscribe.
@@ -51,8 +56,11 @@ go run ./cmd/jetstream --client-port=-1 --cluster-port=-1 `
 Use double-dash application flags with `go run` so the Go command does not
 consume similarly named flags.
 
-See [docs/tutorial.md](docs/tutorial.md) for separate-process cluster examples,
-protocol details, and implementation notes.
+See [docs/README.md](docs/README.md) for:
+
+- the design of a direct-call Core NATS-style broker built from scratch;
+- maintained same-process and local multi-process alternatives;
+- documentation for the current protocol experiment.
 
 ## Architecture
 
