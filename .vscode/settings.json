@@ -59,18 +59,16 @@
     ]
   },
   "cSpell.words": [
-    "appliedgocode",
-    "coverprofile",
     "deadcode",
+    "fe3dback",
     "golangci",
-    "gopls",
     "gotest",
     "gotestsum",
+    "jetstream",
     "LASTEXITCODE",
-    "pkgname",
-    "taskfile",
-    "venv",
-    "wingo",
-    "fe3dback"
+    "matejovsky",
+    "miroslav",
+    "natswire",
+    "pkgname"
   ]
 }
