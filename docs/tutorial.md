@@ -1,11 +1,11 @@
 # Embedded NATS tutorial with in-process connections
 
-> Scope: this document describes the demos currently implemented in the
-> repository. They use the official `nats.go` client connected to an embedded
-> server over `Server.InProcessConn()`, so no client TCP connection exists.
-> See [Core broker from scratch](core-broker-from-scratch.md) for the
-> direct-call design and [Existing alternatives](alternatives.md) for
-> maintained options.
+> Scope: this document describes the demos implemented in this repository.
+> They use the official `nats.go` client connected to an embedded server over
+> `Server.InProcessConn()`, so no client TCP connection exists. See
+> [Existing alternatives](alternatives.md) for other local messaging options
+> and [Core broker from scratch](core-broker-from-scratch.md) for a design
+> study of a protocol-free broker.
 
 ## 1. What this demo proves
 

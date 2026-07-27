@@ -30,7 +30,7 @@ nc, err := nats.Connect("", nats.InProcessServer(ns))
 This avoids TCP but still imports `nats.go`, creates a client, performs the
 NATS handshake, encodes commands, parses frames, and uses `net.Pipe`.
 
-The requested API would be new upstream functionality, not a different use of
+The proposed API would be new upstream functionality, not a different use of
 an existing public API.
 
 ### 1.1 Search coverage
@@ -152,7 +152,7 @@ An account lazily owns one internal account client. The client:
 - has no network connection;
 - is not exposed through monitoring as an ordinary application connection.
 
-This is the closest internal foundation for the requested API.
+This is the closest internal foundation for the proposed API.
 
 ### 4.3 Internal subscriptions
 
@@ -837,8 +837,8 @@ this document and linked from the issue.
 
 The supported choices would then be:
 
-1. use `nats.go` with `nats.InProcessServer(ns)`;
-2. maintain a small protocol client such as the current experiment;
+1. use `nats.go` with `nats.InProcessServer(ns)`, as this repository does;
+2. maintain a small hand-written NATS protocol client;
 3. build a separate in-process broker;
 4. maintain a private nats-server patch and accept rebasing costs.
 
