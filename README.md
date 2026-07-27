@@ -1,56 +1,51 @@
-# Embedded NATS feasibility demo
+# Embedded NATS demo
 
 This repository demonstrates message passing through an embedded NATS server
-without using a NATS client library in application code.
+using the official `nats.go` client without any client network connection.
 
-The current code is a protocol experiment. It does not meet the stricter
-requirement of publishing and subscribing through direct server method calls.
-The server's supported in-process API still uses `net.Pipe` and NATS protocol
-frames.
+An earlier iteration avoided `nats.go` entirely and wrote the NATS text
+protocol by hand. That requirement was based on the wrong assumption that the
+client library must use the network. It does not: `nats.go` can connect to an
+embedded server entirely over in-memory pipes. The hand-written protocol code
+was removed in favor of the client library.
 
-It contains two local-only applications:
+The repository contains two approaches with two local-only applications each.
 
-- `cmd/nats`: core NATS publish and subscribe.
-- `cmd/jetstream`: JetStream stream creation, durable pull consumption,
-  publishing, and explicit acknowledgement.
+The in-process approach (recommended) sets the `nats.Options` field
+`InProcessServer`, which maps directly to `Server.InProcessConn()`:
 
-Each process embeds `github.com/nats-io/nats-server/v2/server`. Its application
-code obtains a `net.Conn` from `Server.InProcessConn()` and writes the NATS text
-protocol directly. Multiple processes exchange messages through NATS routes
-bound to loopback addresses.
+- `cmd/inprocess-nats`: core NATS publish and subscribe.
+- `cmd/inprocess-jetstream`: JetStream stream creation, durable pull
+  consumption, publishing, and explicit acknowledgement.
 
-## Feasibility result
+The custom dialer approach reaches the same in-process connection through
+`nats.SetCustomDialer`, following
+<https://docs.nats.io/using-nats/developer/tutorials/custom_dialer>:
 
-The approach is possible, with an important boundary:
+- `cmd/dialer-nats`: core NATS publish and subscribe.
+- `cmd/dialer-jetstream`: the same JetStream round trip.
 
-- The server offers `Server.InProcessConn()` as the exported in-process entry
-  point.
-- Publishing and subscribing still use the NATS wire protocol.
-- JetStream operations still use its subject-based JSON API.
-- The lower-level server client, subscription, stream, and consumer
-  implementations are unexported.
-
-No project Go source imports `github.com/nats-io/nats.go`. That module can still
-appear as an indirect module dependency of `nats-server`, but it is absent from
-the application build dependency graph.
-
-This is a feasibility demo, not a production client implementation. It omits
-reconnects, authentication, TLS, concurrent dispatch, and other client-library
-features.
+Each process embeds `github.com/nats-io/nats-server/v2/server`. In both
+approaches the client transport is a `net.Pipe` from `Server.InProcessConn()`,
+so no client TCP connection exists. Multiple processes exchange messages
+through NATS routes bound to loopback addresses.
 
 ## Quick start
 
 Run a standalone core NATS round trip:
 
 ```powershell
-go run ./cmd/nats --client-port=-1 --cluster-port=-1
+go run ./cmd/inprocess-nats --client-port=-1 --cluster-port=-1
+go run ./cmd/dialer-nats --client-port=-1 --cluster-port=-1
 ```
 
 Run a standalone JetStream round trip:
 
 ```powershell
-go run ./cmd/jetstream --client-port=-1 --cluster-port=-1 `
+go run ./cmd/inprocess-jetstream --client-port=-1 --cluster-port=-1 `
   --store-dir=.test-results/quickstart-js
+go run ./cmd/dialer-jetstream --client-port=-1 --cluster-port=-1 `
+  --store-dir=.test-results/quickstart-dialer-js
 ```
 
 Use double-dash application flags with `go run` so the Go command does not
@@ -60,7 +55,7 @@ See [docs/README.md](docs/README.md) for:
 
 - the design of a direct-call Core NATS-style broker built from scratch;
 - maintained same-process and local multi-process alternatives;
-- documentation for the current protocol experiment.
+- a tutorial for the current demos.
 
 ## Architecture
 
@@ -68,7 +63,7 @@ See [docs/README.md](docs/README.md) for:
 process A                                      process B
 +-------------------------------+              +-------------------------------+
 | demo application              |              | demo application              |
-|   NATS text protocol          |              |   NATS text protocol          |
+|   nats.go client              |              |   nats.go client              |
 |          |                    |              |          |                    |
 |   Server.InProcessConn()      |              |   Server.InProcessConn()      |
 |          | net.Pipe           |              |          | net.Pipe           |
@@ -80,8 +75,9 @@ process A                                      process B
 Shared code is organized as follows:
 
 - `pkg/embeddedserver`: reusable local server configuration and startup.
-- `pkg/natswire`: reusable minimal synchronous NATS protocol implementation.
-- `pkg/jetstream`: reusable JetStream JSON API calls over `natswire`.
+- `pkg/natsinprocess`: `nats.go` connection through the `InProcessServer`
+  option (recommended).
+- `pkg/natsdialer`: `nats.go` connection through a custom in-process dialer.
 - `internal/demo`: shared command behavior types.
 
 ## Verification

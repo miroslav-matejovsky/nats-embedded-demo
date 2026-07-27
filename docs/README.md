@@ -11,6 +11,7 @@ Core NATS-style messaging only.
 - [nats-server direct API proposal](nats-server-direct-api-proposal.md)
   records related upstream work, current internal extension points, the likely
   review concerns, and copy-paste issue and pull request plans.
-- [Current protocol experiment](tutorial.md) documents the code currently in
-  this repository. That experiment uses `Server.InProcessConn()` and the NATS
-  protocol. It is not the direct-call design.
+- [Current demos](tutorial.md) documents the code currently in this
+  repository. The demos connect the official `nats.go` client to an embedded
+  server through `Server.InProcessConn()`, so no client TCP connection exists.
+  This is not the direct-call design.
